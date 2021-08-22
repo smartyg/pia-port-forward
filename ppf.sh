@@ -1,13 +1,11 @@
 #!/bin/bash
 
-#check environment variables
-# USER PASS GATEWAY
-if [[ ! $USER || ! $PASS || ! $GATEWAY ]]
+#check environment variables: USER PASS
+if [[ ! $USER || ! $PASS ]]
 then
-	echo This script requires 3 environment variables:
+	echo This script requires 2 environment variables:
 	echo USER    - the username
 	echo PASS    - the password for the given username
-	echo GATEWAY - the gateway address
 	exit 1
 fi
 
@@ -34,6 +32,8 @@ CONF_DIR="${SCRIPT_DIR}/.."
 TOKEN_FILE="${RUN_DIR}/../token"
 PAYLOAD_FILE="${RUN_DIR}/payload"
 PORT_FILE="${RUN_DIR}/port"
+GATEWAY_FILE="${RUN_DIR}/../gateway"
+IPADDR_FILE="${RUN_DIR}/../ipaddr"
 
 # Run time variables, will be read from the run-dir
 TOKEN=
@@ -43,13 +43,11 @@ PAYLOAD=
 PAYLOAD_PORT=
 PAYLOAD_EXPIRES=0
 PORT=
+IPADDR=
 
 function set_variable
 {
-	if [ $# -ne 2 ]
-	then
-		return 1
-	fi
+	[ $# -ne 2 ] && return 1
 
 	local name="$1"
 	local value="$2"
@@ -60,10 +58,7 @@ function set_variable
 
 function save_token
 {
-	if [ $# -ne 2 ]
-	then
-		return 1
-	fi
+	[ $# -ne 2 ] && return 1
 
 	local token="$1"
 	local expires="$2"
@@ -77,10 +72,7 @@ EOF
 
 function save_payload
 {
-	if [ $# -ne 4 ]
-	then
-		return 1
-	fi
+	[ $# -ne 4 ] && return 1
 
 	local signature="$1"
 	local payload="$2"
@@ -98,10 +90,7 @@ EOF
 
 function save_port
 {
-	if [ $# -ne 1 ]
-	then
-		return 1
-	fi
+	[ $# -ne 1 ] && return 1
 
 	local port="$1"
 
@@ -118,6 +107,7 @@ function token_timeout_timestamp
 
 function request_token
 {
+	echo "request new token"
 	local response=$(curl -s -u "${USER}:${PASS}" "${TOKEN_URL}")
 
 	if [ "$(echo "${response}" | jq -r '.status')" != "OK" ]
@@ -125,6 +115,9 @@ function request_token
 		echo -e "${RED}The token request response does not contain an OK status.${NC}"
 		return 1
 	fi
+
+	echo "recieved a new token"
+
 	local token=$(echo "${response}" | jq -r '.token')
 	local token_expires=$(token_timeout_timestamp)
 
@@ -132,26 +125,27 @@ function request_token
 	set_variable TOKEN_EXPIRES "${token_expires}"
 	save_token "${token}" "${token_expires}"
 
+	echo "Token is now: ${TOKEN}"
+
 	return 0
 }
 
 function request_payload
 {
-	if [ is_token_expired ]
-	then
-		request_token
-		if [ $? -ne 0 ]
-		then
-			return 1
-		fi
-	fi
+	echo "request new payload"
+	is_token_expired && request_token || return 1
+
+	echo "Token is: ${TOKEN}"
 
 	local response=$(curl -sGk --data-urlencode "token=${TOKEN}" "https://${GATEWAY}:19999/getSignature")
 	if [ "$(echo "$response" | jq -r '.status')" != "OK" ]
 	then
 		echo -e "${RED}The payload response does not contain an OK status.${NC}"
+		echo "response: ${response}"
 		return 1
 	fi
+
+	echo "recieved a new payload"
 
 	local payload=$(echo "$response" | jq -r '.payload')
 	local signature=$(echo "$response" | jq -r '.signature')
@@ -166,19 +160,20 @@ function request_payload
 	set_variable PAYLOAD_EXPIRES "${payload_expires}"
 	save_payload "${signature}" "${payload}" "${payload_port}" "${payload_expires}"
 
+	echo "Payload is now: ${PAYLOAD}"
+
 	return 0
 }
 
 function request_port
 {
+	echo "open port"
 	if [ is_payload_expired ]
 	then
 		request_payload
-		if [ $? -ne 0 ]
-		then
-			return 1
-		fi
 	fi
+
+	echo "Payload is: ${PAYLOAD}"
 
 	local response=$(curl -sGk --data-urlencode "payload=${PAYLOAD}" --data-urlencode "signature=${SIGNATURE}" "https://${GATEWAY}:19999/bindPort")
 	if [ "$(echo "$response" | jq -r '.status')" != "OK" ]
@@ -187,53 +182,64 @@ function request_port
 		return 1
 	fi
 
+	echo "Port ${PAYLOAD_PORT} is (re)binded"
+
 	set_variable PORT "${PAYLOAD_PORT}"
 	save_port "${PAYLOAD_PORT}"
+
+	echo "Port is now: ${PORT}"
 
 	return 0
 }
 
 function is_payload_expired
 {
-	local payload_expires_epoch=$(date --date='$PAYLOAD_EXPIRES' "+%s")
+	local payload_expires_epoch=$(date --date="$PAYLOAD_EXPIRES" "+%s")
 	local cur_epoch=$(date "+%s")
 
-	if [ "$payload_expires_epoch" -lt "$cur_epoch" ]
-	then
-		return 0
-	fi
-
+	[ "$payload_expires_epoch" -lt "$cur_epoch" ] && return 0
 	return 1
 }
 
 function is_token_expired
 {
-	local token_expires_epoch=$(date --date='$TOKEN_EXPIRES' "+%s")
+	local token_expires_epoch=$(date --date="$TOKEN_EXPIRES" "+%s")
 	local cur_epoch=$(date "+%s")
-	if [ "$token_expires_epoch" -lt "$cur_epoch" ]
-	then
-		return 0
-	fi
+	
+	[ "$token_expires_epoch" -lt "$cur_epoch" ] && return 0
 	return 1
 }
 
 function run_scripts
 {
+	local port="$1"
+	local old_port="$2"
+	local payload_expires="$3"
+	local gateway="$4"
+	local ipaddr="$5"
+
 	if [ -d "$SCRIPT_DIR" ]
 	then
 		for f in $(find "$SCRIPT_DIR" -follow -maxdepth 1 -executable -type f | sort)
 		do
 			local script_name=$(basename "${f}")
 			echo "run ${script_name}"
-			${f} $@
+			${f} "$port" "$old_port" "$payload_expires" "$gateway" "$ipaddr"
 			[ $? -ne 0 ] && echo -e "script \"${script_name}\" returned with status $?."
 		done
 	fi
 }
 
+[ -e "$GATEWAY_FILE" ] && source "$GATEWAY_FILE"
+if [[ ! $GATEWAY ]]
+then
+        echo "This script requires the gateway address to be availible in: ${GATEWAY_FILE}"
+        exit 1
+fi
 [ -e "$TOKEN_FILE" ] && source "$TOKEN_FILE"
 [ -e "$PAYLOAD_FILE" ] && source "$PAYLOAD_FILE"
 [ -e "$PORT_FILE" ] && source "$PORT_FILE"
+[ -e "$IPADDR_FILE" ] && source "$IPADDR_FILE"
 
 OLD_PORT="$PORT"
 
@@ -243,6 +249,6 @@ then
 	exit 1
 fi
 
-run_scripts "$PORT" "$OLD_PORT" "$PAYLOAD_EXPIRES" "$GATEWAY"
+run_scripts "$PORT" "$OLD_PORT" "$PAYLOAD_EXPIRES" "$GATEWAY" "$IPADDR"
 
 exit 0

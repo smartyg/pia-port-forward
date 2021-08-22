@@ -1,5 +1,8 @@
 [Unit]
 Description=Run the PIA port forward service every 15 minutes
+After=openvpn.target
+BindsTo=openvpn.target
+Requires=openvpn.target
 
 [Timer]
 OnUnitInactiveSec=10m

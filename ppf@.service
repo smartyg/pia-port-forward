@@ -1,9 +1,10 @@
 [Unit]
 Description=PIA (private Internet Access) port forward enabling script
+Requires=openvpn.target
+After=openvpn.target
 
 [Service]
 Type=oneshot
-PrivateTmp=true
 RuntimeDirectory=ppf/%i
 RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0700
@@ -11,6 +12,20 @@ ConfigurationDirectory=ppf/%i
 ConfigurationDirectoryMode=0700
 EnvironmentFile=-/etc/ppf/user.conf
 ExecStart=/usr/sbin/ppf "%i"
+
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+ProtectHostname=true
+ProtectClock=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+LockPersonality=true
+RestrictSUIDSGID=true
 
 [Install]
 WantedBy=multi-user.target
