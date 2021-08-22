@@ -24,13 +24,7 @@ Summary:        Enables port forwarding over a PIA VPN
 License:        GPL-2.0-or-later
 Group:          System/Daemons
 Url:            https://www.github.com/smartyg/pia-port-forward
-Source0:        ppf.sh
-Source1:        ppf@.service
-Source2:        ppf@.timer
-Source3:        ppf.conf
-Source4:        user.conf
-Source5:        openvpn-set-gateway.sh
-Source9:        LICENSE
+Source0:        %{name}-%{version}.tar.xz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildArch:      noarch
 BuildRequires:  systemd-rpm-macros
@@ -41,28 +35,28 @@ Requires:       systemd >= 236
 This opens and/or renew a port bind on the PIA (Private Internet Access) VPN service. After a port is aquired custom scripts can be run to update/change other services on the running system.
 
 %prep
-cp %{SOURCE9} %{_builddir}
+%setup -q -n %{name}-%{version}
 
 %build
-sed -i -e "s:@RUNDIR@:%_rundir:g" %{SOURCE5}
+sed -i -e "s:@RUNDIR@:%_rundir:g" openvpn-set-gateway.sh
 
 %install
 install -m 700 -d %{buildroot}%{_sysconfdir}
 install -m 700 -d %{buildroot}%{_sysconfdir}/%{short_name}
 install -m 700 -d %{buildroot}%{_sysconfdir}/%{short_name}/general
-install -m 600 %{SOURCE4} %{buildroot}%{_sysconfdir}/%{short_name}/user.conf
+install -m 600 user.conf %{buildroot}%{_sysconfdir}/%{short_name}/user.conf
 
 install -m 750 -d %{buildroot}%{_sbindir}
-install -m 750 %{SOURCE0} %{buildroot}%{_sbindir}/ppf
+install -m 750 ppf.sh %{buildroot}%{_sbindir}/ppf
 
 install -m 750 -d %{buildroot}%{_libexecdir}/%{short_name}
-install -m 750 %{SOURCE5} %{buildroot}%{_libexecdir}/%{short_name}/openvpn-set-gateway.sh
+install -m 750 openvpn-set-gateway.sh %{buildroot}%{_libexecdir}/%{short_name}/openvpn-set-gateway.sh
 
-install -D -m 644 %{SOURCE1} %{buildroot}%{_unitdir}/ppf@.service
-install -D -m 644 %{SOURCE2} %{buildroot}%{_unitdir}/ppf@.timer
+install -D -m 644 ppf@.service %{buildroot}%{_unitdir}/ppf@.service
+install -D -m 644 ppf@.timer %{buildroot}%{_unitdir}/ppf@.timer
 
 install -d -m 0755 %{buildroot}%{_tmpfilesdir}
-install -m 0644 %{SOURCE3} %{buildroot}%{_tmpfilesdir}/ppf.conf
+install -m 0644 ppf.conf %{buildroot}%{_tmpfilesdir}/ppf.conf
 
 %pre
 %service_add_pre ppf@.service ppf@.timer
