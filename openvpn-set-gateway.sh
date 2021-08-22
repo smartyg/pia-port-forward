@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PPF_RUN_DIR="/run/ppf"
+PPF_RUN_DIR="@RUNDIR@/ppf"
 PPF_GATEWAY_FILE="${PPF_RUN_DIR}/gateway"
 IP_ADDR_FILE="${PPF_RUN_DIR}/ipaddr"
 
