@@ -1,0 +1,16 @@
+[Unit]
+Description=PIA (private Internet Access) port forward enabling script
+
+[Service]
+Type=oneshot
+PrivateTmp=true
+RuntimeDirectory=ppf/%i
+RuntimeDirectoryPreserve=yes
+RuntimeDirectoryMode=0700
+ConfigurationDirectory=ppf/%i
+ConfigurationDirectoryMode=0700
+EnvironmentFile=-/etc/ppf/user.conf
+ExecStart=/usr/sbin/ppf "%i"
+
+[Install]
+WantedBy=multi-user.target

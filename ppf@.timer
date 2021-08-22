@@ -1,0 +1,9 @@
+[Unit]
+Description=Run the PIA port forward service every 15 minutes
+
+[Timer]
+OnUnitInactiveSec=10m
+OnActiveSec=15s
+
+[Install]
+WantedBy=timers.target
